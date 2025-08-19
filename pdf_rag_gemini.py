@@ -1,18 +1,17 @@
 import os
 import streamlit as st
-from llama_index.core import VectorStoreIndex, Document, SimpleDirectoryReader, Settings
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
 from llama_index.llms.gemini import Gemini
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.embeddings.gemini import GeminiEmbedding
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 import tempfile
 import shutil
-from pathlib import Path
 import google.generativeai as genai
 
 # Configure page
-st.set_page_config(page_title="PDF Chat with RAG (Gemini)", page_icon="📚", layout="wide")
-st.title("📚 Chat with Your PDFs using RAG + Gemini 1.5 Flash")
-st.markdown("Upload PDF documents and ask questions about their content using Google's Gemini!")
+st.set_page_config(page_title="PDF Chat with RAG (Hybrid)", page_icon="📚", layout="wide")
+st.title("📚 Chat with Your PDFs using RAG + Hybrid Model")
+st.markdown("Upload PDF documents and ask questions using Sentence Transformers embeddings + Gemini generation!")
 
 # Initialize session state
 if "messages" not in st.session_state:
@@ -54,7 +53,7 @@ with st.sidebar:
 
 
 def setup_rag_system(uploaded_files, api_key, model, chunk_size, chunk_overlap, temperature):
-    """Set up the RAG system with uploaded documents using Gemini"""
+    """Set up the RAG system with uploaded documents using Hybrid approach"""
 
     if not api_key:
         st.error("Please provide a Google Gemini API key")
@@ -85,10 +84,9 @@ def setup_rag_system(uploaded_files, api_key, model, chunk_size, chunk_overlap, 
             api_key=api_key
         )
 
-        # Configure Gemini embedding model
-        embed_model = GeminiEmbedding(
-            model_name="models/embedding-001",
-            api_key=api_key
+        # Configure Sentence Transformers embedding model
+        embed_model = HuggingFaceEmbedding(
+            model_name="sentence-transformers/all-mpnet-base-v2"
         )
 
         # Configure node parser
@@ -103,7 +101,7 @@ def setup_rag_system(uploaded_files, api_key, model, chunk_size, chunk_overlap, 
         Settings.node_parser = node_parser
 
         # Create vector store index
-        with st.spinner("Creating vector index with Gemini embeddings..."):
+        with st.spinner("Creating vector index with Sentence Transformers embeddings..."):
             index = VectorStoreIndex.from_documents(documents)
 
         # Create query engine with custom prompt
@@ -157,7 +155,7 @@ with col1:
                 st.session_state.query_engine, doc_count = result
                 st.session_state.documents_loaded = True
                 st.session_state.messages = []  # Clear previous messages
-                st.success(f"✅ Successfully processed {doc_count} documents with Gemini!")
+                st.success(f"✅ Successfully processed {doc_count} documents with Sentence Transformers + Gemini!")
                 st.rerun()
 
 with col2:
@@ -180,7 +178,7 @@ with col2:
 
             # Generate response
             with st.chat_message("assistant"):
-                with st.spinner("Gemini is thinking..."):
+                with st.spinner("Thinking..."):
                     try:
                         response = st.session_state.query_engine.query(prompt)
                         response_text = str(response)
@@ -203,7 +201,7 @@ with col2:
                                     st.write("---")
 
                     except Exception as e:
-                        error_msg = f"Error generating response with Gemini: {str(e)}"
+                        error_msg = f"Error generating response: {str(e)}"
                         st.error(error_msg)
                         st.session_state.messages.append({
                             "role": "assistant",
@@ -217,46 +215,52 @@ if st.session_state.documents_loaded:
         st.rerun()
 
 # Instructions and tips
-with st.expander("ℹ️ How to Use with Gemini"):
+with st.expander("ℹ️ How to Use - Hybrid Model"):
     st.markdown("""
     ### Getting Started:
     1. **Get your Gemini API Key** from [Google AI Studio](https://makersuite.google.com/app/apikey)
     2. **Enter your API Key** in the sidebar
     3. **Upload PDF files** using the file uploader
-    4. **Click "Process Documents"** to create the RAG index with Gemini embeddings
-    5. **Start chatting** with your documents powered by Gemini!
+    4. **Click "Process Documents"** to create the RAG index with Sentence Transformers embeddings
+    5. **Start chatting** with your documents powered by the hybrid model!
 
-    ### Gemini Model Options:
-    - **gemini-1.5-flash**: ⚡ Fastest and most cost-effective, great for most use cases
-    - **gemini-1.5-pro**: 🧠 More capable reasoning, better for complex questions
-    - **gemini-pro**: 📊 Balanced performance and speed
+    ### Hybrid Model Benefits:
+    - **🎯 Superior Retrieval**: Uses proven all-mpnet-base-v2 embeddings for better document matching
+    - **⚡ Fast Generation**: Gemini 1.5 Flash for quick, high-quality responses
+    - **💰 Cost Effective**: No API costs for embeddings, only for generation
+    - **🔍 Better Accuracy**: Combines best-in-class retrieval with modern generation
+
+    ### Model Architecture:
+    - **Embeddings**: sentence-transformers/all-mpnet-base-v2 (local, specialized for semantic search)
+    - **Generation**: Gemini 1.5 Flash (fast, capable, cost-effective)
+    - **Best of both worlds**: Proven retrieval + modern generation
 
     ### Tips for Better Results:
     - **Adjust chunk size**: Smaller chunks (200-400) for specific facts, larger chunks (600-1000) for broader context
     - **Use specific questions**: Instead of "What is this about?", try "What are the main conclusions about X?"
     - **Reference specific topics**: Mention key terms or concepts from your documents
     - **Check sources**: Expand the "Source Information" to see which parts of your documents were used
-
-    ### Gemini Advantages:
-    - **Large Context Window**: Handles longer documents and conversations better
-    - **Multimodal**: Can process text, images, and other formats (future enhancement)
-    - **Cost Effective**: Especially with Gemini 1.5 Flash
-    - **Fast Processing**: Quick response times for real-time chat
     """)
 
 # Model comparison info
-with st.expander("🔍 Gemini Model Comparison"):
+with st.expander("🔍 Embedding Model Comparison"):
     st.markdown("""
-    | Model | Speed | Cost | Best For |
-    |-------|-------|------|----------|
-    | **Gemini 1.5 Flash** | ⚡⚡⚡ Very Fast | 💰 Low | Quick Q&A, summaries, simple analysis |
-    | **Gemini 1.5 Pro** | ⚡⚡ Fast | 💰💰 Medium | Complex reasoning, detailed analysis |
-    | **Gemini Pro** | ⚡ Moderate | 💰💰 Medium | General purpose, balanced performance |
+    | Model | Type | Best For | Speed | Quality |
+    |-------|------|----------|-------|---------|
+    | **all-mpnet-base-v2** | Local Sentence Transformers | Document retrieval, semantic search | ⚡⚡ Fast | 🎯🎯🎯 Excellent |
+    | **Gemini Embeddings** | API-based | General purpose tasks | ⚡ Variable | 🎯🎯 Good |
+    | **OpenAI Embeddings** | API-based | General purpose, large context | ⚡ Variable | 🎯🎯 Good |
+
+    **Why all-mpnet-base-v2?**
+    - Specifically trained for semantic similarity tasks
+    - Proven performance on retrieval benchmarks
+    - Runs locally (no API costs or latency)
+    - Optimized for finding relevant document chunks
     """)
 
 # Footer
 st.markdown("---")
 st.markdown(
-    "🤖 **Powered by Google Gemini**: This app uses Gemini's advanced language models and embeddings. "
-    "Get your free API key at [Google AI Studio](https://makersuite.google.com/app/apikey)."
+    "🤖 **Hybrid Architecture**: This app combines Sentence Transformers (embeddings) + Google Gemini (generation) "
+    "for optimal performance. Embeddings run locally while generation uses Gemini API."
 )
