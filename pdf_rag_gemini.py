@@ -261,6 +261,6 @@ with st.expander("🔍 Embedding Model Comparison"):
 # Footer
 st.markdown("---")
 st.markdown(
-    "🤖 Product of Air.Works **Hybrid Architecture**: This app combines Sentence Transformers (embeddings) + Google Gemini (generation) "
+    "🤖 Product of **Air.Works** || Hybrid Architecture: This app combines Sentence Transformers (embeddings) + Google Gemini (generation) "
     "for optimal performance. Embeddings run locally while generation uses Gemini API."
 )
